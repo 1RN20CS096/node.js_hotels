@@ -3,7 +3,9 @@ let router = express.Router();
 
 let Person= require('./../models/person');
 
-router.post("/", async (req,res)=>{
+let {jwtAuthMiddleware, generateToken} = require('./../jwt');
+
+router.post("/signup", async (req,res)=>{
     try{
         let data = req.body // the body parser process the data and store it in request.body
 
@@ -20,7 +22,16 @@ router.post("/", async (req,res)=>{
     // save the new person to database
      let response = await newPerson.save();
      console.log('data saved');
-     res.status(200).json(response);
+
+     let payload ={
+        id: response.id,
+        username: response.username
+     }
+
+     let token = generateToken(payload);
+     console.log('token is: ', token);
+
+     res.status(200).json({response: response,token: token  });
     }
     catch(err){
        console.log(err);
@@ -28,6 +39,48 @@ router.post("/", async (req,res)=>{
     }
     
 });
+
+//profile route
+router.get('/profile',jwtAuthMiddleware, async(req,res) =>{
+    try{
+        let userData = req.user;
+        console.log("user data: ",userData);
+
+        let userId = userData.id;
+        let user = await Person.findById(userId);
+
+        res.status(200).json({user});
+    }catch(err){
+        console.error(err);
+        res.status(500).json({error: 'internal server error'});
+    }
+})
+
+router.post('/login', async(req,res)=>{
+    try{
+        //extract username and password from request body
+        let {username,password} = req.body;
+
+        let user = await Person.findOne({username: username});
+        if(!user || !(await user.comparePassword(password))){
+            return res.status(404).json({error:'invalid username and password'});
+        }
+        //generate tokens
+        let payload = {
+            id : user.id,
+            username : user.username
+        }
+
+        let token = generateToken(payload);
+
+        //return token as response
+        res.json({token});
+
+    }catch(err){
+             console.error(err);
+             res.status(500).json({error:'invalid'});
+    }  
+})
 
 router.get('/', async(req,res)=>{
     try{
